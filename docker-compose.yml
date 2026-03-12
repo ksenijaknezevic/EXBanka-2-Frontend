@@ -1,0 +1,15 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=/api
+    image: exbanka-frontend:latest
+    container_name: exbanka_frontend
+    ports:
+      - "3001:80"
+    restart: unless-stopped
+    # Ensures host.docker.internal resolves on Linux (no-op on Mac/Windows)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
