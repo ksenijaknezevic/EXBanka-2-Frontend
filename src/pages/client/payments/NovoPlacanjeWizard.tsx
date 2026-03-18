@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, ExternalLink } from 'lucide-react'
 import { getClientAccounts } from '@/services/bankaService'
 import {
@@ -8,6 +8,13 @@ import {
   getPaymentRecipients,
 } from '@/services/paymentService'
 import type { AccountListItem, PaymentRecipient, CreatePaymentIntentResult } from '@/types'
+
+interface LocationState {
+  recipientId?: string
+  recipientName?: string
+  recipientAccount?: string
+  payerAccountId?: string
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -21,6 +28,8 @@ type Step = 'form' | 'verify' | 'done'
 
 export default function NovoPlacanjeWizard() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const prefill = (location.state ?? {}) as LocationState
 
   const [step, setStep] = useState<Step>('form')
 
@@ -30,10 +39,10 @@ export default function NovoPlacanjeWizard() {
   const [loadingInit, setLoadingInit] = useState(true)
   const [initError, setInitError] = useState<string | null>(null)
 
-  // Form fields
-  const [racunPlatioceId, setRacunPlatioceId] = useState('')
-  const [brojRacunaPrimaoca, setBrojRacunaPrimaoca] = useState('')
-  const [nazivPrimaoca, setNazivPrimaoca] = useState('')
+  // Form fields – pre-filled from location.state when coming from BrzoPlacanjeWidget
+  const [racunPlatioceId, setRacunPlatioceId] = useState(prefill.payerAccountId ?? '')
+  const [brojRacunaPrimaoca, setBrojRacunaPrimaoca] = useState(prefill.recipientAccount ?? '')
+  const [nazivPrimaoca, setNazivPrimaoca] = useState(prefill.recipientName ?? '')
   const [iznos, setIznos] = useState('')
   const [sifraPlacanja, setSifraPlacanja] = useState('289')
   const [pozivNaBroj, setPozivNaBroj] = useState('')
@@ -55,7 +64,10 @@ export default function NovoPlacanjeWizard() {
       .then(([accs, recs]) => {
         setAccounts(accs)
         setRecipients(recs)
-        if (accs.length > 0) setRacunPlatioceId(accs[0].id)
+        // Pre-fill account from location state; fall back to first account
+        if (!prefill.payerAccountId && accs.length > 0) {
+          setRacunPlatioceId(accs[0].id)
+        }
       })
       .catch((err: Error) => setInitError(err.message))
       .finally(() => setLoadingInit(false))

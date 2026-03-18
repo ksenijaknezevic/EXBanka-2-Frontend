@@ -222,6 +222,95 @@ export async function getAccountTransactions(
   }))
 }
 
+// ─── GetExchangeRate ──────────────────────────────────────────────────────────
+
+/**
+ * Fetches a converted amount from the bank exchange-rate endpoint.
+ * Returns null if the endpoint is unavailable (graceful fallback).
+ */
+export async function getExchangeRate(
+  fromOznaka: string,
+  toOznaka: string,
+  amount: number
+): Promise<number | null> {
+  try {
+    const res = await apiGet<{ result?: string | number; convertedAmount?: string | number }>(
+      '/bank/exchange-rates',
+      { from: fromOznaka, to: toOznaka, amount }
+    )
+    const raw = res.result ?? res.convertedAmount
+    if (raw === undefined || raw === null) return null
+    return parseNum(raw)
+  } catch {
+    return null
+  }
+}
+
+// ─── ExecuteExchangeTransfer ───────────────────────────────────────────────────
+
+export interface ExchangeTransferResult {
+  referenceId: string
+  sourceAccountId: string
+  targetAccountId: string
+  fromOznaka: string
+  toOznaka: string
+  originalAmount: number
+  grossAmount: number
+  provizija: number
+  netAmount: number
+  viaRsd: boolean
+  rateNote: string
+}
+
+/**
+ * Executes a currency-converting self-transfer between the authenticated user's
+ * own accounts. Returns the execution receipt on success.
+ */
+export async function executeExchangeTransfer(req: {
+  sourceAccountId: string
+  targetAccountId: string
+  fromOznaka: string
+  toOznaka: string
+  amount: number
+}): Promise<ExchangeTransferResult> {
+  const body = {
+    sourceAccountId: Number(req.sourceAccountId),
+    targetAccountId: Number(req.targetAccountId),
+    fromOznaka: req.fromOznaka,
+    toOznaka: req.toOznaka,
+    amount: req.amount,
+  }
+
+  type BackendRes = {
+    referenceId: string
+    sourceAccountId: string | number
+    targetAccountId: string | number
+    fromOznaka: string
+    toOznaka: string
+    originalAmount: string | number
+    grossAmount: string | number
+    provizija: string | number
+    netAmount: string | number
+    viaRsd: boolean
+    rateNote: string
+  }
+
+  const res = await apiPost<typeof body, BackendRes>('/bank/exchange-rates/execute', body)
+  return {
+    referenceId: res.referenceId,
+    sourceAccountId: String(res.sourceAccountId),
+    targetAccountId: String(res.targetAccountId),
+    fromOznaka: res.fromOznaka,
+    toOznaka: res.toOznaka,
+    originalAmount: parseNum(res.originalAmount),
+    grossAmount: parseNum(res.grossAmount),
+    provizija: parseNum(res.provizija),
+    netAmount: parseNum(res.netAmount),
+    viaRsd: res.viaRsd,
+    rateNote: res.rateNote,
+  }
+}
+
 // ─── RenameAccount ────────────────────────────────────────────────────────────
 
 export async function renameAccount(id: string, newName: string): Promise<void> {
