@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Users,
@@ -7,6 +8,12 @@ import {
   CreditCard,
   ArrowLeftRight,
   X,
+  Banknote,
+  SendHorizontal,
+  UserCheck,
+  ClipboardList,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
@@ -40,7 +47,6 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['ADMIN'],
     permission: 'MANAGE_USERS',
   },
-
   // ── Employee ───────────────────────────────────────────────────────────
   {
     label: 'Moj portal',
@@ -60,15 +66,20 @@ const NAV_ITEMS: NavItem[] = [
     icon: <CreditCard className="h-5 w-5" />,
     roles: ['EMPLOYEE'],
   },
-
   // ── Client (text-only, no icons per spec) ──────────────────────────────
-  { label: 'Početna',    to: '/client',                   roles: ['CLIENT'] },
-  { label: 'Računi',     to: '/client/accounts',          roles: ['CLIENT'] },
-  { label: 'Plaćanja',   to: '/client/payments/history',  roles: ['CLIENT'] },
-  { label: 'Transferi',  to: '/client/payments/transfer', roles: ['CLIENT'] },
-  { label: 'Menjačnica', to: '/client/exchange',          roles: ['CLIENT'] },
-  { label: 'Kartice',    to: '/client/cards',             roles: ['CLIENT'] },
-  { label: 'Krediti',    to: '/client/loans',             roles: ['CLIENT'] },
+  { label: 'Početna',    to: '/client',           roles: ['CLIENT'] },
+  { label: 'Računi',     to: '/client/accounts',  roles: ['CLIENT'] },
+  // NOTE: Plaćanja is rendered as a collapsible submenu below — not here
+  { label: 'Menjačnica', to: '/client/exchange',  roles: ['CLIENT'] },
+  { label: 'Kartice',    to: '/client/cards',     roles: ['CLIENT'] },
+  { label: 'Krediti',    to: '/client/loans',     roles: ['CLIENT'] },
+]
+
+const PAYMENT_SUB_ITEMS = [
+  { label: 'Novo plaćanje',      to: '/client/payments/new',        icon: <SendHorizontal className="h-4 w-4" /> },
+  { label: 'Prenos',             to: '/client/payments/transfer',   icon: <ArrowLeftRight className="h-4 w-4" /> },
+  { label: 'Primaoci plaćanja',  to: '/client/payments/recipients', icon: <UserCheck className="h-4 w-4" /> },
+  { label: 'Pregled plaćanja',   to: '/client/payments/history',    icon: <ClipboardList className="h-4 w-4" /> },
 ]
 
 interface SidebarProps {
@@ -78,14 +89,18 @@ interface SidebarProps {
 
 export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const { user, clearAuth, hasPermission } = useAuthStore()
+  const location = useLocation()
+
+  const isClient = user?.userType === 'CLIENT'
+  const isOnPayments = location.pathname.startsWith('/client/payments')
+
+  const [paymentOpen, setPaymentOpen] = useState(isOnPayments)
 
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (!user?.userType || !item.roles.includes(user.userType)) return false
     if (item.permission && !hasPermission(item.permission)) return false
     return true
   })
-
-  const isClient = user?.userType === 'CLIENT'
 
   return (
     <>
@@ -96,7 +111,6 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           onClick={onMobileClose}
         />
       )}
-
       <aside
         className={[
           'flex h-screen w-64 flex-col bg-primary-900 text-white z-30 flex-shrink-0',
@@ -153,6 +167,52 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               {item.label}
             </NavLink>
           ))}
+
+          {/* ── Plaćanja collapsible submenu (CLIENT only) ── */}
+          {isClient && (
+            <div>
+              <button
+                onClick={() => setPaymentOpen((v) => !v)}
+                className={[
+                  'w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  isOnPayments
+                    ? 'bg-primary-700 text-white'
+                    : 'text-primary-300 hover:bg-primary-800 hover:text-white',
+                ].join(' ')}
+              >
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-4 w-4" />
+                  Plaćanja
+                </div>
+                {paymentOpen
+                  ? <ChevronDown className="h-4 w-4" />
+                  : <ChevronRight className="h-4 w-4" />}
+              </button>
+
+              {paymentOpen && (
+                <div className="mt-1 space-y-0.5 pl-3">
+                  {PAYMENT_SUB_ITEMS.map((sub) => (
+                    <NavLink
+                      key={sub.to}
+                      to={sub.to}
+                      onClick={onMobileClose}
+                      className={({ isActive }) =>
+                        [
+                          'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-primary-700 text-white'
+                            : 'text-primary-300 hover:bg-primary-800 hover:text-white',
+                        ].join(' ')
+                      }
+                    >
+                      {sub.icon}
+                      {sub.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
 
         {/* Logout (non-client roles; client uses header dropdown) */}

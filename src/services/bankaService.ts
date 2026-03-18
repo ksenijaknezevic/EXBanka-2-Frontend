@@ -246,68 +246,49 @@ export async function getExchangeRate(
   }
 }
 
-// ─── ExecuteExchangeTransfer ───────────────────────────────────────────────────
+// ─── CreateExchangeTransferIntent ─────────────────────────────────────────────
 
-export interface ExchangeTransferResult {
-  referenceId: string
-  sourceAccountId: string
-  targetAccountId: string
-  fromOznaka: string
-  toOznaka: string
-  originalAmount: number
-  grossAmount: number
-  provizija: number
-  netAmount: number
-  viaRsd: boolean
-  rateNote: string
+export interface ExchangeTransferIntentResult {
+  intentId: string
+  actionId: string
+  brojNaloga: string
+  status: string
 }
 
 /**
- * Executes a currency-converting self-transfer between the authenticated user's
- * own accounts. Returns the execution receipt on success.
+ * Creates a currency-converting transfer intent between the authenticated user's
+ * own accounts. Returns intentId + actionId for the subsequent mobile verification step.
  */
-export async function executeExchangeTransfer(req: {
+export async function createExchangeTransferIntent(req: {
+  idempotencyKey: string
   sourceAccountId: string
   targetAccountId: string
-  fromOznaka: string
-  toOznaka: string
-  amount: number
-}): Promise<ExchangeTransferResult> {
+  amount: number           // amount to debit from source account
+  convertedAmount: number  // amount to credit to target account (after conversion)
+  svrhaPlacanja?: string
+}): Promise<ExchangeTransferIntentResult> {
   const body = {
+    idempotencyKey:  req.idempotencyKey,
     sourceAccountId: Number(req.sourceAccountId),
     targetAccountId: Number(req.targetAccountId),
-    fromOznaka: req.fromOznaka,
-    toOznaka: req.toOznaka,
-    amount: req.amount,
+    amount:          req.amount,
+    convertedAmount: req.convertedAmount,
+    svrhaPlacanja:   req.svrhaPlacanja ?? 'Konverzija valuta',
   }
 
   type BackendRes = {
-    referenceId: string
-    sourceAccountId: string | number
-    targetAccountId: string | number
-    fromOznaka: string
-    toOznaka: string
-    originalAmount: string | number
-    grossAmount: string | number
-    provizija: string | number
-    netAmount: string | number
-    viaRsd: boolean
-    rateNote: string
+    intentId:   number | string
+    actionId:   number | string
+    brojNaloga: string
+    status:     string
   }
 
-  const res = await apiPost<typeof body, BackendRes>('/bank/exchange-rates/execute', body)
+  const res = await apiPost<typeof body, BackendRes>('/bank/client/exchange-transfers', body)
   return {
-    referenceId: res.referenceId,
-    sourceAccountId: String(res.sourceAccountId),
-    targetAccountId: String(res.targetAccountId),
-    fromOznaka: res.fromOznaka,
-    toOznaka: res.toOznaka,
-    originalAmount: parseNum(res.originalAmount),
-    grossAmount: parseNum(res.grossAmount),
-    provizija: parseNum(res.provizija),
-    netAmount: parseNum(res.netAmount),
-    viaRsd: res.viaRsd,
-    rateNote: res.rateNote,
+    intentId:   String(res.intentId),
+    actionId:   String(res.actionId),
+    brojNaloga: res.brojNaloga,
+    status:     res.status,
   }
 }
 

@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
-import { CheckCircle2, Clock, XCircle, Filter, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, Filter, Download, ChevronDown, ChevronUp } from 'lucide-react'
 import { getPaymentHistory, getPaymentDetail } from '@/services/paymentService'
 import Dialog from '@/components/common/Dialog'
 import type { PaymentIntent, PaymentHistoryFilter } from '@/types'
+import { downloadPaymentReceipt } from '@/utils/pdfReceipt'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -254,14 +255,12 @@ export default function PregledPlacanja() {
             </div>
 
             {detail.status === 'REALIZOVANO' && (
-              <a
-                href={`/api/bank/payments/${detail.id}/receipt`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => downloadPaymentReceipt(detail)}
                 className="btn btn-secondary flex items-center gap-1.5 text-sm w-full justify-center"
               >
-                <ExternalLink className="h-4 w-4" /> Preuzmi potvrdu o plaćanju
-              </a>
+                <Download className="h-4 w-4" /> Štampaj potvrdu
+              </button>
             )}
           </div>
         )}

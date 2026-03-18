@@ -2,23 +2,28 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import ProveraEkvivalentnostiTab from './ProveraEkvivalentnostiTab'
 import type { AccountListItem } from '@/types'
-import type { ExchangeTransferResult } from '@/services/bankaService'
 
 // ─── Service mocks ────────────────────────────────────────────────────────────
 
 vi.mock('@/services/bankaService', () => ({
   getCurrencies: vi.fn().mockResolvedValue([]),
   getClientAccounts: vi.fn(),
-  executeExchangeTransfer: vi.fn(),
+  createExchangeTransferIntent: vi.fn(),
+}))
+
+vi.mock('@/services/paymentService', () => ({
+  verifyAndExecutePayment: vi.fn(),
 }))
 
 import {
   getClientAccounts,
-  executeExchangeTransfer,
+  createExchangeTransferIntent,
 } from '@/services/bankaService'
+import { verifyAndExecutePayment } from '@/services/paymentService'
 
 const mockGetClientAccounts = vi.mocked(getClientAccounts)
-const mockExecuteExchangeTransfer = vi.mocked(executeExchangeTransfer)
+const mockCreateExchangeTransferIntent = vi.mocked(createExchangeTransferIntent)
+const mockVerifyAndExecutePayment = vi.mocked(verifyAndExecutePayment)
 
 // ─── Test data ────────────────────────────────────────────────────────────────
 
@@ -60,18 +65,11 @@ const usdAccount: AccountListItem = {
 
 const mockAccounts: AccountListItem[] = [eurAccount, rsdAccount, usdAccount]
 
-const mockExecResult: ExchangeTransferResult = {
-  referenceId: 'KNV-1234567890-abc123',
-  sourceAccountId: '1',
-  targetAccountId: '2',
-  fromOznaka: 'EUR',
-  toOznaka: 'RSD',
-  originalAmount: 100,
-  grossAmount: 11641.5,
-  provizija: 58.21,
-  netAmount: 11583.29,
-  viaRsd: false,
-  rateNote: 'Kupovni kurs: 1 EUR = 116,42 RSD',
+const mockIntentResult = {
+  intentId: '42',
+  actionId: '99',
+  brojNaloga: 'PR-2024-00001',
+  status: 'U_OBRADI',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,7 +77,6 @@ const mockExecResult: ExchangeTransferResult = {
 /** Render the component and flush the mount useEffects (service calls). */
 async function renderComponent() {
   const result = render(<ProveraEkvivalentnostiTab />)
-  // Flush promise microtasks from getCurrencies + getClientAccounts
   await act(async () => {})
   return result
 }
@@ -93,13 +90,23 @@ function typeAmount(value: string) {
   })
 }
 
+/** Bring the component to the confirm step with EUR→RSD, amount=100. */
+async function reachConfirmStep() {
+  await renderComponent()
+  typeAmount('100')
+  fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
+  fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
+  await act(async () => { fireEvent.click(screen.getByTestId('execute-button')) })
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ProveraEkvivalentnostiTab – execution section', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockGetClientAccounts.mockResolvedValue(mockAccounts)
-    mockExecuteExchangeTransfer.mockResolvedValue(mockExecResult)
+    mockCreateExchangeTransferIntent.mockResolvedValue(mockIntentResult)
+    mockVerifyAndExecutePayment.mockResolvedValue({} as never)
   })
 
   afterEach(() => {
@@ -111,14 +118,12 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
 
   it('renders the execution section heading when currencies are different', async () => {
     await renderComponent()
-    // Default: EUR → RSD (different), section should be visible
     expect(screen.getByRole('heading', { name: 'Izvrši konverziju' })).toBeInTheDocument()
   })
 
   it('hides the execution section when the same currency is selected', async () => {
     await renderComponent()
 
-    // Set both selects to EUR
     const [fromSelect] = screen.getAllByRole('combobox')
     fireEvent.change(fromSelect, { target: { value: 'EUR' } })
     const toSelects = screen.getAllByRole('combobox')
@@ -133,9 +138,7 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
     await renderComponent()
 
     const sourceSelect = screen.getByTestId('source-account-select')
-    // Should contain EUR account option
     expect(sourceSelect).toContainHTML('EUR Tekući')
-    // Should NOT contain RSD or USD accounts
     expect(sourceSelect).not.toContainHTML('RSD Tekući')
     expect(sourceSelect).not.toContainHTML('USD Tekući')
   })
@@ -150,11 +153,9 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
   })
 
   it('shows empty state message when no accounts match fromOznaka', async () => {
-    // Only RSD and USD accounts – no CHF
     mockGetClientAccounts.mockResolvedValue([rsdAccount, usdAccount])
     await renderComponent()
 
-    // Change fromOznaka to CHF (which has no accounts)
     const [fromSelect] = screen.getAllByRole('combobox')
     fireEvent.change(fromSelect, { target: { value: 'CHF' } })
 
@@ -162,28 +163,23 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
   })
 
   it('shows empty state message when no accounts match toOznaka', async () => {
-    // Only EUR accounts – no RSD
     mockGetClientAccounts.mockResolvedValue([eurAccount])
     await renderComponent()
 
-    // Default toOznaka is RSD – no RSD account → empty state
     expect(screen.getByText(/Nemate RSD račun/)).toBeInTheDocument()
   })
 
   it('resets source account selection when fromOznaka changes', async () => {
     await renderComponent()
 
-    // Select source account
     const sourceSelect = screen.getByTestId('source-account-select')
     fireEvent.change(sourceSelect, { target: { value: '1' } })
     expect(sourceSelect).toHaveValue('1')
 
-    // Change fromOznaka → reset expected
     const [fromSelect] = screen.getAllByRole('combobox')
     fireEvent.change(fromSelect, { target: { value: 'USD' } })
     await act(async () => {})
 
-    // Source select should now show USD accounts (not previous EUR selection)
     const newSourceSelect = screen.getByTestId('source-account-select')
     expect(newSourceSelect).toHaveValue('')
   })
@@ -192,18 +188,14 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
 
   it('execute button is disabled when amount is empty', async () => {
     await renderComponent()
-
-    const btn = screen.getByTestId('execute-button')
-    expect(btn).toBeDisabled()
+    expect(screen.getByTestId('execute-button')).toBeDisabled()
   })
 
   it('execute button is disabled when no source account is selected', async () => {
     await renderComponent()
 
     typeAmount('100')
-    // Do not select source account
-    const targetSelect = screen.getByTestId('target-account-select')
-    fireEvent.change(targetSelect, { target: { value: '2' } })
+    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
 
     expect(screen.getByTestId('execute-button')).toBeDisabled()
   })
@@ -212,9 +204,7 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
     await renderComponent()
 
     typeAmount('100')
-    const sourceSelect = screen.getByTestId('source-account-select')
-    fireEvent.change(sourceSelect, { target: { value: '1' } })
-    // Do not select target account
+    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
 
     expect(screen.getByTestId('execute-button')).toBeDisabled()
   })
@@ -222,13 +212,9 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
   it('execute button is disabled when source account has insufficient funds', async () => {
     await renderComponent()
 
-    // Amount exceeds EUR account balance (1000)
     typeAmount('9999')
-
-    const sourceSelect = screen.getByTestId('source-account-select')
-    fireEvent.change(sourceSelect, { target: { value: '1' } })
-    const targetSelect = screen.getByTestId('target-account-select')
-    fireEvent.change(targetSelect, { target: { value: '2' } })
+    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
+    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
 
     expect(screen.getByTestId('execute-button')).toBeDisabled()
   })
@@ -237,8 +223,7 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
     await renderComponent()
 
     typeAmount('9999')
-    const sourceSelect = screen.getByTestId('source-account-select')
-    fireEvent.change(sourceSelect, { target: { value: '1' } })
+    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
 
     expect(screen.getByText(/Nedovoljno sredstava/)).toBeInTheDocument()
   })
@@ -247,122 +232,154 @@ describe('ProveraEkvivalentnostiTab – execution section', () => {
     await renderComponent()
 
     typeAmount('100')
-
-    const sourceSelect = screen.getByTestId('source-account-select')
-    fireEvent.change(sourceSelect, { target: { value: '1' } })
-    const targetSelect = screen.getByTestId('target-account-select')
-    fireEvent.change(targetSelect, { target: { value: '2' } })
+    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
+    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
 
     expect(screen.getByTestId('execute-button')).not.toBeDisabled()
   })
 
-  // ── Request payload ──────────────────────────────────────────────────────────
+  // ── Wizard: confirm step ─────────────────────────────────────────────────────
 
-  it('calls executeExchangeTransfer with the correct payload on click', async () => {
-    await renderComponent()
+  it('navigates to confirm step when execute button is clicked', async () => {
+    await reachConfirmStep()
 
-    typeAmount('100')
-
-    const sourceSelect = screen.getByTestId('source-account-select')
-    fireEvent.change(sourceSelect, { target: { value: '1' } })
-    const targetSelect = screen.getByTestId('target-account-select')
-    fireEvent.change(targetSelect, { target: { value: '2' } })
-
-    const btn = screen.getByTestId('execute-button')
-    await act(async () => {
-      fireEvent.click(btn)
-    })
-
-    expect(mockExecuteExchangeTransfer).toHaveBeenCalledOnce()
-    expect(mockExecuteExchangeTransfer).toHaveBeenCalledWith({
-      sourceAccountId: '1',
-      targetAccountId: '2',
-      fromOznaka: 'EUR',
-      toOznaka: 'RSD',
-      amount: 100,
-    })
+    expect(screen.getByText('Potvrdi konverziju')).toBeInTheDocument()
+    expect(screen.getByText(/Zadužuje se/)).toBeInTheDocument()
+    expect(screen.getByText(/Uplaćuje se/)).toBeInTheDocument()
   })
 
-  // ── Success / error feedback ─────────────────────────────────────────────────
+  it('shows source and target account info in confirm step', async () => {
+    await reachConfirmStep()
 
-  it('displays success panel with net amount and reference ID after successful execute', async () => {
-    await renderComponent()
-
-    typeAmount('100')
-    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
-    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('execute-button'))
-    })
-
-    const panel = screen.getByTestId('exec-success')
-    expect(panel).toBeInTheDocument()
-    expect(panel).toHaveTextContent('Konverzija izvršena')
-    expect(panel).toHaveTextContent('RSD')
-    expect(panel).toHaveTextContent('KNV-1234567890-abc123')
+    expect(screen.getByText('EUR Tekući')).toBeInTheDocument()
+    expect(screen.getByText('RSD Tekući')).toBeInTheDocument()
   })
 
-  it('does not display error panel after successful execute', async () => {
-    await renderComponent()
+  it('navigates back to form step when Nazad is clicked in confirm step', async () => {
+    await reachConfirmStep()
 
-    typeAmount('100')
-    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
-    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
+    const nazadBtn = screen.getByRole('button', { name: 'Nazad' })
+    await act(async () => { fireEvent.click(nazadBtn) })
 
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('execute-button'))
-    })
-
-    expect(screen.queryByTestId('exec-error')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('0.00')).toBeInTheDocument()
+    expect(screen.getByTestId('execute-button')).toBeInTheDocument()
   })
 
-  it('displays error panel when executeExchangeTransfer rejects', async () => {
-    mockExecuteExchangeTransfer.mockRejectedValueOnce(new Error('Nedovoljno raspoloživih sredstava'))
-    await renderComponent()
+  // ── Wizard: verify step ──────────────────────────────────────────────────────
 
-    typeAmount('100')
-    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
-    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
+  it('calls createExchangeTransferIntent and navigates to verify step on confirm', async () => {
+    await reachConfirmStep()
 
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('execute-button'))
-    })
+    const confirmBtn = screen.getByRole('button', { name: 'Izvrši konverziju' })
+    await act(async () => { fireEvent.click(confirmBtn) })
 
-    const panel = screen.getByTestId('exec-error')
-    expect(panel).toBeInTheDocument()
-    expect(panel).toHaveTextContent('Nedovoljno raspoloživih sredstava')
+    expect(mockCreateExchangeTransferIntent).toHaveBeenCalledOnce()
+    expect(screen.getByText('Verifikacija konverzije')).toBeInTheDocument()
   })
 
-  it('does not display success panel when execute fails', async () => {
-    mockExecuteExchangeTransfer.mockRejectedValueOnce(new Error('server error'))
-    await renderComponent()
+  it('calls createExchangeTransferIntent with correct payload', async () => {
+    await reachConfirmStep()
 
-    typeAmount('100')
-    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
-    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
+    const confirmBtn = screen.getByRole('button', { name: 'Izvrši konverziju' })
+    await act(async () => { fireEvent.click(confirmBtn) })
 
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('execute-button'))
-    })
-
-    expect(screen.queryByTestId('exec-success')).not.toBeInTheDocument()
+    expect(mockCreateExchangeTransferIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceAccountId: '1',
+        targetAccountId: '2',
+        amount: 100,
+      })
+    )
   })
 
-  it('refreshes accounts after successful execute', async () => {
-    await renderComponent()
+  it('shows error in confirm step when createExchangeTransferIntent fails', async () => {
+    mockCreateExchangeTransferIntent.mockRejectedValueOnce(new Error('Nedovoljno sredstava'))
+    await reachConfirmStep()
 
-    typeAmount('100')
-    fireEvent.change(screen.getByTestId('source-account-select'), { target: { value: '1' } })
-    fireEvent.change(screen.getByTestId('target-account-select'), { target: { value: '2' } })
+    const confirmBtn = screen.getByRole('button', { name: 'Izvrši konverziju' })
+    await act(async () => { fireEvent.click(confirmBtn) })
+
+    expect(screen.getByText('Nedovoljno sredstava')).toBeInTheDocument()
+    // Still on confirm step
+    expect(screen.getByText('Potvrdi konverziju')).toBeInTheDocument()
+  })
+
+  // ── Wizard: done step ────────────────────────────────────────────────────────
+
+  it('calls verifyAndExecutePayment and shows done screen after correct code', async () => {
+    await reachConfirmStep()
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId('execute-button'))
+      fireEvent.click(screen.getByRole('button', { name: 'Izvrši konverziju' }))
     })
-    // Flush the fire-and-forget getClientAccounts().then(...) microtask
+
+    // Enter 6-digit code
+    const codeInput = screen.getByPlaceholderText('______')
+    fireEvent.change(codeInput, { target: { value: '123456' } })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Potvrdi' }))
+    })
+
+    expect(mockVerifyAndExecutePayment).toHaveBeenCalledWith('42', '123456')
+    expect(screen.getByText('Konverzija izvršena')).toBeInTheDocument()
+  })
+
+  it('shows error on verify step when verifyAndExecutePayment fails', async () => {
+    mockVerifyAndExecutePayment.mockRejectedValueOnce(new Error('Netačan kod'))
+    await reachConfirmStep()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Izvrši konverziju' }))
+    })
+
+    const codeInput = screen.getByPlaceholderText('______')
+    fireEvent.change(codeInput, { target: { value: '000000' } })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Potvrdi' }))
+    })
+
+    expect(screen.getByText('Netačan kod')).toBeInTheDocument()
+    // Still on verify step
+    expect(screen.getByPlaceholderText('______')).toBeInTheDocument()
+  })
+
+  it('refreshes accounts after successful verification', async () => {
+    await reachConfirmStep()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Izvrši konverziju' }))
+    })
+
+    const codeInput = screen.getByPlaceholderText('______')
+    fireEvent.change(codeInput, { target: { value: '123456' } })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Potvrdi' }))
+    })
     await act(async () => {})
 
-    // getClientAccounts called once on mount + once after success
+    // getClientAccounts: once on mount + once after success
     expect(mockGetClientAccounts).toHaveBeenCalledTimes(2)
+  })
+
+  it('resets to form step when Nova konverzija is clicked on done screen', async () => {
+    await reachConfirmStep()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Izvrši konverziju' }))
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('______'), { target: { value: '123456' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Potvrdi' }))
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Nova konverzija' }))
+    })
+
+    expect(screen.getByPlaceholderText('0.00')).toBeInTheDocument()
   })
 })
