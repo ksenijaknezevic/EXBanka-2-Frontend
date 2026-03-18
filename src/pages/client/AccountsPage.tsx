@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CreditCard, ArrowUpDown, ChevronDown, ChevronUp } from 'lucide-react'
 import { getClientAccounts, getAccountTransactions } from '@/services/bankaService'
@@ -59,8 +59,9 @@ export default function AccountsPage() {
     setLoadingAccounts(true)
     getClientAccounts()
       .then((data) => {
-        setAccounts(data)
-        if (data.length > 0) setSelectedId(data[0].id)
+        const sorted = [...data].sort((a, b) => b.raspolozivo_stanje - a.raspolozivo_stanje)
+        setAccounts(sorted)
+        if (sorted.length > 0) setSelectedId(sorted[0].id)
       })
       .catch((err: Error) => setAccountsError(err.message))
       .finally(() => setLoadingAccounts(false))
@@ -81,6 +82,19 @@ export default function AccountsPage() {
   }, [loadTransactions])
 
   const selectedAccount = accounts.find((a) => a.id === selectedId) ?? null
+
+  const sortedTransactions = useMemo(() => {
+    if (!transactions.length) return transactions
+    return [...transactions].sort((a, b) => {
+      if (sortBy === 'date') {
+        const diff = new Date(a.vreme_izvrsavanja).getTime() - new Date(b.vreme_izvrsavanja).getTime()
+        return sortOrder === 'asc' ? diff : -diff
+      } else {
+        const diff = a.tip_transakcije.localeCompare(b.tip_transakcije)
+        return sortOrder === 'asc' ? diff : -diff
+      }
+    })
+  }, [transactions, sortBy, sortOrder])
 
   function toggleSortOrder() {
     setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))
@@ -224,7 +238,7 @@ export default function AccountsPage() {
                     <p className="text-sm text-gray-500 text-center py-6">Nema transakcija za ovaj račun.</p>
                   ) : (
                     <div className="divide-y divide-gray-100">
-                      {transactions.map((tx) => (
+                      {sortedTransactions.map((tx) => (
                         <div key={tx.id} className="py-3 flex items-center justify-between gap-4">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
