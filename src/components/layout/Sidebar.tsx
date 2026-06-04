@@ -246,6 +246,14 @@ const NAV_ITEMS: NavItem[] = [
     end: true,
   },
   {
+    label: 'Međubankarska OTC',
+    to: '/interbank/otc',
+    icon: <Landmark className="h-5 w-5" />,
+    roles: ['EMPLOYEE', 'ADMIN'],
+    permission: ['SUPERVISOR', 'AGENT'],
+    end: true,
+  },
+  {
     label: 'Fondovi',
     to: '/funds',
     icon: <PieChart className="h-5 w-5" />,
@@ -277,6 +285,7 @@ const NAV_ITEMS: NavItem[] = [
     end: true,
   },
   { label: 'Istorija pregovora', to: '/otc/history', roles: ['CLIENT'], end: true },
+  { label: 'Međubankarska OTC', to: '/interbank/otc', roles: ['CLIENT'], end: true },
   { label: 'Fondovi', to: '/funds', roles: ['CLIENT'], end: true },
 ]
 
