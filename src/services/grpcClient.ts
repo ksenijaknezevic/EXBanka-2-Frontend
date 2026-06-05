@@ -54,7 +54,8 @@ async function apiRequest<Res>(
       typeof errorBody.code === 'number'
         ? errorBody.code
         : mapHttpToGrpcCode(response.status)
-    const rawMessage: string = errorBody.message ?? ''
+    // gRPC-gateway koristi `message`; interbank handler-i vraćaju `{"error": ...}`.
+    const rawMessage: string = errorBody.message ?? errorBody.error ?? ''
 
     if (code === GrpcStatus.UNAUTHENTICATED && !opts._isRefresh && !opts.skipAuth) {
       const newToken = await attemptTokenRefresh()

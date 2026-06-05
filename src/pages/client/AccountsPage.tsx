@@ -275,11 +275,13 @@ export default function AccountsPage() {
                           <span
                             className={[
                               'text-sm font-bold shrink-0',
-                              tx.tip_transakcije === 'UPLATA' ? 'text-green-600' : 'text-red-500',
+                              tx.tip_transakcije === 'UPLATA' || (tx.tip_transakcije === 'INTERBANK' && tx.iznos >= 0)
+                                ? 'text-green-600'
+                                : 'text-red-500',
                             ].join(' ')}
                           >
-                            {tx.tip_transakcije === 'UPLATA' ? '+' : '-'}
-                            {formatAmount(tx.iznos, selectedAccount.valuta_oznaka)}
+                            {tx.tip_transakcije === 'UPLATA' || (tx.tip_transakcije === 'INTERBANK' && tx.iznos >= 0) ? '+' : '-'}
+                            {formatAmount(Math.abs(tx.iznos), selectedAccount.valuta_oznaka)}
                           </span>
                         </div>
                       ))}
