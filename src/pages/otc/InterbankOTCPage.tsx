@@ -325,11 +325,12 @@ export default function InterbankOTCPage() {
         </div>
       )}
 
-      {/* ── Dolazne ponude (mi smo banka prodavca) ── */}
+      {/* ── OTC pregovori (mi smo kupac ili prodavac) ── */}
       <section data-testid="incoming-negotiations" className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-lg font-semibold mb-1">Dolazne ponude</h2>
+        <h2 className="text-lg font-semibold mb-1">OTC pregovori</h2>
         <p className="text-xs text-gray-400 mb-4">
-          Prihvatanje kreira opcioni ugovor. Naplata premije je zaseban korak.
+          Pregovori gde ste kupac ili prodavac (uključujući ponude koje ste poslali drugoj banci).
+          Prihvatanje kreira opcioni ugovor; naplata premije je zaseban korak.
         </p>
         {loading && <Loader2 className="animate-spin text-blue-600" />}
         {!loading && incoming.length === 0 && (
@@ -343,7 +344,8 @@ export default function InterbankOTCPage() {
                 <th>Količina</th>
                 <th>Cena/jed.</th>
                 <th>Premium</th>
-                <th>Kupac</th>
+                <th>Uloga</th>
+                <th>Druga strana</th>
                 <th>Status</th>
                 <th>Na potezu</th>
                 <th></th>
@@ -360,7 +362,12 @@ export default function InterbankOTCPage() {
                     <td>{n.amount}</td>
                     <td>{n.pricePerUnit.amount} {n.pricePerUnit.currency}</td>
                     <td>{n.premium.amount} {n.premium.currency}</td>
-                    <td>{n.buyer.routingNumber}/{n.buyer.id}</td>
+                    <td>{n.myRole === 'BUYER' ? 'Kupac' : 'Prodavac'}</td>
+                    <td>
+                      {n.myRole === 'BUYER'
+                        ? `${n.seller.routingNumber}/${n.seller.id}`
+                        : `${n.buyer.routingNumber}/${n.buyer.id}`}
+                    </td>
                     <td>{n.status}</td>
                     <td>{n.isOngoing ? (n.myTurn ? 'Vi' : 'Druga banka') : '—'}</td>
                     <td className="space-x-2 whitespace-nowrap">

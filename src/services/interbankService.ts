@@ -57,7 +57,7 @@ export interface OtcNegotiation extends OtcOffer {
   isOngoing: boolean
 }
 
-// Dolazna ponuda koju mi hostujemo (mi smo banka prodavca). Vraća GET /negotiations.
+// OTC pregovor u kojem je naša banka strana (kupac ILI prodavac). Vraća GET /negotiations.
 export interface IncomingNegotiation {
   negotiationId: ForeignBankId
   ticker: string
@@ -71,6 +71,7 @@ export interface IncomingNegotiation {
   isOngoing: boolean
   lastModifiedBy: ForeignBankId
   myTurn: boolean
+  myRole?: 'BUYER' | 'SELLER' // uloga NAŠE banke: BUYER (mi kupac) | SELLER (mi prodavac)
 }
 
 export interface InterbankPaymentResult {
