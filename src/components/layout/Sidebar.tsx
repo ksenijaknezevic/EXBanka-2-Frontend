@@ -286,6 +286,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: 'Istorija pregovora', to: '/otc/history', roles: ['CLIENT'], end: true },
   { label: 'Međubankarska OTC', to: '/interbank/otc', roles: ['CLIENT'], end: true },
+  { label: 'Međubankarsko plaćanje', to: '/interbank/payments', roles: ['CLIENT'], end: true },
   { label: 'Fondovi', to: '/funds', roles: ['CLIENT'], end: true },
 ]
 
