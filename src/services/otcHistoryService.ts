@@ -2,7 +2,7 @@ import { useAuthStore } from '@/store/authStore'
 
 export interface OTCHistoryEntry {
   id: number
-  action: 'CREATED' | 'COUNTER' | 'ACCEPTED' | 'DECLINED'
+  action: 'CREATED' | 'COUNTER' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED'
   changedBy: number
   amount?: number
   pricePerStock?: number
@@ -23,7 +23,7 @@ export interface NegotiationSummary {
   stockName: string
   buyerId: number
   sellerId: number
-  finalStatus: 'ACCEPTED' | 'REJECTED' | 'DEACTIVATED'
+  finalStatus: 'ACCEPTED' | 'REJECTED' | 'DEACTIVATED' | 'EXPIRED'
   createdAt: string
   lastModified: string
   history: OTCHistoryEntry[]

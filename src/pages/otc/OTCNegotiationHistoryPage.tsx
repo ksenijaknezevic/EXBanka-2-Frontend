@@ -33,12 +33,14 @@ const FINAL_STATUS_STYLE: Record<string, string> = {
   ACCEPTED:    'bg-green-100 text-green-800',
   REJECTED:    'bg-red-100 text-red-800',
   DEACTIVATED: 'bg-gray-100 text-gray-600',
+  EXPIRED:     'bg-slate-200 text-slate-700',
 }
 
 const FINAL_STATUS_LABEL: Record<string, string> = {
   ACCEPTED:    'Prihvaćeno',
   REJECTED:    'Odbijeno',
   DEACTIVATED: 'Povučeno',
+  EXPIRED:     'Isteklo',
 }
 
 const ACTION_STYLE: Record<string, string> = {
@@ -46,6 +48,7 @@ const ACTION_STYLE: Record<string, string> = {
   COUNTER:  'bg-amber-100 text-amber-800',
   ACCEPTED: 'bg-green-100 text-green-800',
   DECLINED: 'bg-red-100 text-red-800',
+  EXPIRED:  'bg-slate-200 text-slate-700',
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -53,6 +56,7 @@ const ACTION_LABEL: Record<string, string> = {
   COUNTER:  'Kontraponuda',
   ACCEPTED: 'Prihvatanje',
   DECLINED: 'Odbijanje',
+  EXPIRED:  'Isteklo',
 }
 
 // ─── History entry row ────────────────────────────────────────────────────────
@@ -77,7 +81,7 @@ function HistoryEntryRow({ entry, myId }: { entry: OTCHistoryEntry; myId: number
             {ACTION_LABEL[entry.action] ?? entry.action}
           </span>
           <span className="text-xs text-gray-500">
-            {isMe ? 'Vi' : `Korisnik #${entry.changedBy}`} · {fmtDateTime(entry.createdAt)}
+            {entry.changedBy === 0 ? 'Sistem' : isMe ? 'Vi' : `Korisnik #${entry.changedBy}`} · {fmtDateTime(entry.createdAt)}
           </span>
           {entry.newStatus && (
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${FINAL_STATUS_STYLE[entry.newStatus] ?? 'bg-gray-100 text-gray-700'}`}>
@@ -246,6 +250,7 @@ export default function OTCNegotiationHistoryPage() {
                 <option value="ACCEPTED">Prihvaćeno</option>
                 <option value="REJECTED">Odbijeno</option>
                 <option value="DEACTIVATED">Povučeno</option>
+                <option value="EXPIRED">Isteklo</option>
               </select>
             </div>
             <div>
